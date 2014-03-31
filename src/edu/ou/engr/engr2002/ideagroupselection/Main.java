@@ -16,7 +16,7 @@ import au.com.bytecode.opencsv.CSVReader;
 import edu.ou.engr.engr2002.ideagroupselection.Idea.IdeaSet;
 
 public class Main {
-	private static final int NUM_GROUPS = 9;
+	public static final int NUM_GROUPS = 9;
 	public static final boolean LOG = true;
 	public static final boolean DEBUG = true;
 	
@@ -35,14 +35,22 @@ public class Main {
 		// idea as the leader of the groups. Remove the leaders from the
 		// set of students.
 		HashSet<Student> remainingStudents = new HashSet<Student>(students);
-		HashMap<Integer, Group> groups = makeGroups(ideas, remainingStudents);
+		HashMap<Integer, Group> groups = makeGroupsFromVotes(ideas, 
+				remainingStudents);
 		// Put the remaining students in groups
 		groupStudents(groups, remainingStudents);
 		
 		printIdeasGroups(ideas, students, groups.values());
 	}
 
-
+	/**
+	 * Prompts the user to select the file with ideas, students, and votes,
+	 * and reads the file into ideas and students (including determining the
+	 * number of votes each idea received).
+	 * @param ideas Empty IdeaSet
+	 * @param students Empty HashSet
+	 * @throws IOException if there is a problem reading the file
+	 */
 	private static void readStudentsIdeasMethod2(IdeaSet ideas, 
 			HashSet<Student> students) throws IOException {
 		String filePath = FileSelectionDialog.showDialog(
@@ -102,14 +110,16 @@ public class Main {
 	}
 	
 	/**
-	 * TODO full doc
-	 * pre: ideas is sorted
-	 * post: leaders are removed from students
-	 * @param ideas
-	 * @param students
-	 * @return
+	 * Choose the idea for each group based on the votes, put the students who
+	 * proposed those ideas in the respective groups as leaders, and remove
+	 * the leaders from the list of students.
+	 * @param ideas Set of ideas with vote data calculated
+	 * @param students Set of students (after the method exits, group leaders
+	 * will be removed from this set)
+	 * @return Map from group number to group objects, with only the group
+	 * leaders added to the group objects' lists of members
 	 */
-	private static HashMap<Integer, Group> makeGroups(IdeaSet ideas,
+	private static HashMap<Integer, Group> makeGroupsFromVotes(IdeaSet ideas,
 			HashSet<Student> students) {
 		List<Idea> topIdeas = ideas.getTopIdeas(NUM_GROUPS);
 		HashMap<Integer, Group> groups = new HashMap<Integer, Group>(NUM_GROUPS);
@@ -119,7 +129,7 @@ public class Main {
 		for (Student s : students) {
 			Idea idea = s.getProposedIdea();
 			if (idea != null && topIdeas.contains(idea)) {
-				groups.put(idea.getNumber(), new Group(s, idea));
+				groups.put(idea.number, new Group(s, idea));
 				leaders.add(s);
 			}
 		}
@@ -136,6 +146,17 @@ public class Main {
 		return groups;
 	}
 	
+	/**
+	 * Put the remaining students in the groups. Tries to put students in 
+	 * groups for the ideas that they preferred.
+	 * @param groups Map from group numbers to group objects
+	 * @param remainingStudents Students who are not yet in a group.
+	 * When the method is called, this will probably be all the students except
+	 * the leaders. When the method exits, this will contain all the students
+	 * who still could not be placed in groups because either their preferred
+	 * groups filled up (with students who ranked those ideas higher) or they
+	 * voted but did not choose any of the ideas that won. 
+	 */
 	private static void groupStudents(HashMap<Integer, Group> groups, 
 			HashSet<Student> remainingStudents) {
 		// Make a list of students who did not vote and remove them from
@@ -229,13 +250,20 @@ public class Main {
 //		}
 	}
 	
+	/**
+	 * Attempts to even out group sizes, given the sets of groups that have 
+	 * too few members or are completely full.
+	 * @param smallGroups Groups with too few members
+	 * @param largeGroups Groups that are completely full
+	 * @return Set of groups whose sizes could not be fixed
+	 */
 	private static HashSet<Group> resolveGroupSizes(HashSet<Group> smallGroups,
 			HashSet<Group> largeGroups) {
 		HashSet<Group> problemGroups = new HashSet<Group>();
 		// For each group that is too small...
 		for (Group small : smallGroups) {
 			// First see if students from the other groups ranked that idea.
-			int idea = small.getIdea().getNumber();
+			int idea = small.idea.number;
 			TreeMap<Integer, Pair<Student, Group>> stuff = 
 					new TreeMap<Integer, Pair<Student, Group>>();
 			for (Group large: largeGroups) {
@@ -278,7 +306,7 @@ public class Main {
 		}
 		HashMap<Idea, Group> ideasGroups = new HashMap<Idea, Group>();
 		for (Group g : groups) {
-			ideasGroups.put(g.getIdea(), g);
+			ideasGroups.put(g.idea, g);
 		}
 		TreeSet<Group> groupsSorted = new TreeSet<Group>(groups);
 
@@ -287,8 +315,8 @@ public class Main {
 		}
 		
 		for (Idea idea : ideas.getIdeasSorted()) {
-			System.out.printf("%3d - %2d: \"%s\"\n", idea.getVotes(),
-					idea.getNumber(), idea.getName());
+			System.out.printf("%3d - %2d: \"%s\"\n", idea.votes,
+					idea.number, idea.name);
 		}
 
 		System.out.println("\n\n---------- Details ----------");
@@ -300,18 +328,20 @@ public class Main {
 		for (Idea idea : ideas.getIdeasSorted()) {
 			String name = ideasStudents.get(idea).getName();
 			name = name.replaceAll("([^,]*), (.*)", "$2 $1");
-			System.out.printf("%3d - %2d: \"%s\" - %s%s\n", idea.getVotes(),
-					idea.getNumber(), idea.getName(), name,
+			System.out.printf("%3d - %2d: \"%s\" - %s%s\n", idea.votes,
+					idea.number, idea.name, name,
 					ideasGroups.containsKey(idea)
-							? String.format(groupFormat, ideasGroups.get(idea).getNumber())
+							? String.format(groupFormat, ideasGroups.get(idea).number)
 							: "");
 		}
 	}
 	
+	/** Print log messages to the command line */
 	public static void log(String message) {
 		if (LOG) System.out.println(message);
 	}
 	
+	/** Print debug messages to the command line */
 	public static void debug(String message) {
 		if (DEBUG) System.out.println(message);
 	}

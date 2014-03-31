@@ -4,42 +4,50 @@ import java.util.Collections;
 import java.util.List;
 
 public class Group implements Comparable<Group> {
+	public static final int MAX_MEMBERS = 5;
 	
+	/** Keeps track of the next group number to use */
 	private static int nextGroupNumber = 1;
 	
-	private Idea idea;
-	private int groupNumber;
+	/** The group's idea */
+	public final Idea idea;
+	/** The group number (NOT the idea number) */
+	public final int number;
+	/** The members of the group */
 	private ArrayList<Student> members = new ArrayList<Student>();
 	
+	/**
+	 * Creates a group with the given idea and leader. The group number will
+	 * be the next one up from the previous group created.
+	 */
 	public Group(Student leader, Idea idea) {
 		this.idea = idea;
 		members.add(leader);
-		groupNumber = nextGroupNumber++;
+		number = nextGroupNumber++;
 	}
 	
-	public Idea getIdea() {
-		return idea;
-	}
-	
-	public int getNumber() {
-		return groupNumber;
-	}
-	
+	/** Gets whether the group is full */
 	public boolean isFull() {
-		return members.size() == 5;
+		return members.size() == MAX_MEMBERS;
 	}
 	
+	/** Gets the size of the group */
 	public int getSize() {
 		return members.size();
 	}
 	
+	/** 
+	 * Adds a student to the group.
+	 * TODO Does not check if the group is full - why?
+	 * @return false if the student is already in the group, true if the 
+	 * student could be added
+	 */
 	public boolean addMember(Student student) {
 //		if (isFull())
 //			throw new IllegalStateException("The group is full.");
 		if (members.contains(student))
 			return false;
-		members.add(student);
-		return true;
+		return members.add(student);
 	}
 	
 	/**
@@ -53,6 +61,7 @@ public class Group implements Comparable<Group> {
 		return members.remove(student);
 	}
 	
+	/** Gets an unmodifiable list view of the members of the group */
 	public List<Student> getMemberView() {
 		return Collections.unmodifiableList(members);
 	}
@@ -67,14 +76,14 @@ public class Group implements Comparable<Group> {
 	public int getGroupValue() {
 		int value = 0;
 		for (Student s : members.subList(1, members.size())) {
-			value += s.getRankOfIdea(idea.getNumber());
+			value += s.getRankOfIdea(idea.number);
 		}
 		return value;
 	}
 	
 	public String getBriefString() {
 		StringBuilder sb = new StringBuilder();
-		sb.append("Group " + groupNumber + "\n");
+		sb.append("Group " + number + "\n");
 		sb.append("Idea " + idea + "\n");
 		sb.append("1) " + members.get(0).getName() + " - Leader\n");
 		for (int i = 1; i < members.size(); ++i)
@@ -84,11 +93,11 @@ public class Group implements Comparable<Group> {
 	
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
-		sb.append("Group " + groupNumber + "\n");
+		sb.append("Group " + number + "\n");
 		sb.append("Idea " + idea + "\n");
 		sb.append("1) " + members.get(0).getName() + " - Leader\n");
 		for (int i = 1; i < members.size(); ++i) {
-			int rank = members.get(i).getRankOfIdea(idea.getNumber());
+			int rank = members.get(i).getRankOfIdea(idea.number);
 			sb.append((i + 1) + ") " + members.get(i).getName() + " - "
 					+ (rank == 0 ? "n/a" : rank + ""));
 			if (Main.DEBUG && members.get(i).didStudentVote())
@@ -99,8 +108,8 @@ public class Group implements Comparable<Group> {
 	}
 
 	public int compareTo(Group other) {
-		if (other == null || groupNumber < other.groupNumber) return -1;
-		if (groupNumber > other.groupNumber) return 1;
+		if (other == null || number < other.number) return -1;
+		if (number > other.number) return 1;
 		return 0;
 	}
 }

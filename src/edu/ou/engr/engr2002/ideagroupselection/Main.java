@@ -35,7 +35,7 @@ public class Main {
 		// idea as the leader of the groups. Remove the leaders from the
 		// set of students.
 		HashSet<Student> remainingStudents = new HashSet<Student>(students);
-		HashMap<Integer, Group> groups = makeGroupsFromVotes(ideas, 
+		HashMap<Integer, Group> groups = makeGroupsFromUser(ideas, 
 				remainingStudents);
 		// Put the remaining students in groups
 		groupStudents(groups, remainingStudents);
@@ -143,6 +143,72 @@ public class Main {
 					"Error", JOptionPane.ERROR_MESSAGE);
 //			System.exit(1);
 		}
+		return groups;
+	}
+	
+	private static HashMap<Integer, Group> makeGroupsFromUser(IdeaSet ideas,
+			HashSet<Student> students) {
+		HashMap<Integer, Group> groups = null; 
+		HashSet<Student> leaders = null;
+		
+		// Keep asking for the group numbers as long as the input is invalid
+		String input = null;
+		String error = null;
+		while (true) {
+			groups = new HashMap<Integer, Group>();
+			leaders = new HashSet<Student>();
+			input = JOptionPane.showInputDialog(null,
+					"Enter the numbers of the winning ideas.", input);
+			if (input == null)
+				System.exit(0);
+			
+			// Split the string into numbers (\D means non-digits)
+			String[] numbers = input.split("[\\D]");
+			error = null;
+			// Parse each number into a string and make a group for it
+			for (String numStr : numbers) {
+				int number;
+				try { 
+					number = Integer.parseInt(numStr);
+				} catch (NumberFormatException ex) {
+					error = "Not a valid group number: " + numStr;
+					break;
+				}
+				// Make sure the idea wasn't entered multiple times
+				if (groups.containsKey((Integer)number)) {
+					error = "Duplicate group number: " + number;
+					break;
+				}
+				// Find the idea information
+				Idea idea = ideas.get(number);
+				if (idea == null) {
+					error = "Group number not found: " + number;
+					break;
+				}
+				// Find the student who proposed the idea
+				Student leader = idea.findProposer(students);
+				if (leader == null) {
+					error = "Couldn't find student who proposed idea " + number;
+					break;
+				}
+				// Make a group for the idea and add the student who proposed
+				// the idea as the leader
+				groups.put(number, new Group(leader, idea));
+				leaders.add(leader);
+			}
+//			if (error == null && groups.size() != NUM_GROUPS) {
+//				error = "Wrong number of groups (needed " + NUM_GROUPS
+//						+ ", found " + groups.size() + ")";
+//			}
+			// If there were no errors, stop asking the user for input
+			if (error == null)
+				break;
+			JOptionPane.showMessageDialog(null, error, 
+					"Error creating groups", JOptionPane.ERROR_MESSAGE);
+		}
+		// Remove all the students who are now in groups
+		students.removeAll(leaders);
+		
 		return groups;
 	}
 	

@@ -16,7 +16,9 @@ public class Idea implements Comparable<Idea> {
 	public int votes;
 	
 	public Idea(String name, int number) {
-		this.name = name;
+		// remove * characters from idea names - could cause problems later
+		name = name.replace('*', '.');
+		this.name = name.replace('"', '\'');
 		this.number = number;
 	}
 	
@@ -39,14 +41,14 @@ public class Idea implements Comparable<Idea> {
 		return number;
 	}
 
+	/** Idea equality is based only on number */
 	@Override
 	public boolean equals(Object obj) {
 		if (this == obj)
 			return true;
 		if (obj == null || getClass() != obj.getClass())
 			return false;
-		Idea other = (Idea) obj;
-		return other.number == this.number;
+		return ((Idea) obj).number == this.number;
 	}
 
 	/** Sorts the ideas in descending order of votes */
@@ -125,7 +127,7 @@ public class Idea implements Comparable<Idea> {
 			updateIdeasSorted();
 			StringBuilder sb = new StringBuilder();
 			for (Idea idea : ideasSorted)
-				sb.append(idea.votes + " - " + idea + "\n");
+				sb.append(idea.votes + " - " + idea + "\r\n");
 			return sb.toString();
 		}
 	}

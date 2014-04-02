@@ -25,36 +25,45 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultHighlighter.DefaultHighlightPainter;
 import javax.swing.text.Highlighter;
 
-@SuppressWarnings("serial")
+/**
+ * Dialog for showing output from the group selection program and writing it
+ * to a file
+ */
 public class OutputDialog extends JDialog {
+	private static final long serialVersionUID = 1L;
+	private static final String FONT = "<font face=\"sans-serif\">";
 	private static final int SPACE = 5;
 	private static final int SPACE_L = 10;
-	private JPanel mainPnl = new JPanel(new BorderLayout(SPACE, SPACE));
 	private JEditorPane textPane;
-	private JScrollPane scrollPane;
 	private JTextField highlightTF = new JTextField(3);
+	private FileSelectionPanel outputPnl;
 	private DefaultHighlightPainter yellowPainter = 
 	        new DefaultHighlightPainter(Color.YELLOW);
 	private DefaultHighlightPainter cyanPainter =
 			new DefaultHighlightPainter(Color.CYAN);
-	private Frame parent;
 	
 	public OutputDialog(Frame parent, String text) {
 		super(parent, "Results", true);
-		this.parent = parent;
 
+		JPanel mainPnl = new JPanel(new BorderLayout(SPACE, SPACE));
 		add(mainPnl);
-		mainPnl.setBorder(new EmptyBorder(SPACE_L, SPACE_L, SPACE_L, SPACE_L));
+		mainPnl.setBorder(new EmptyBorder(SPACE_L, SPACE_L, SPACE, SPACE_L));
 
-		text = "<font face=\"sans-serif\">" 
-				+ text.replaceAll("\r?\n", "<br>\n");
-		text = text.replaceAll("(\nGroup \\d+|\nIdea \\d+[^\\n]*)", "<b>$1</b>");
+		// Get ready to display the results formatted with HTML:
+		// use a sans-serif font, and replace all line breaks with <br> tags
+		text = FONT + text.replaceAll("\r?\n", "<br>\n");
+		// Make group and idea names bold
+		text = text.replaceAll("(\nGroup \\d+|\nIdea \\d+[^\n]*)", "<b>$1</b>");
 		
 		textPane = new JEditorPane("text/html", text);
-		textPane.setCaretPosition(0);
-		scrollPane = new JScrollPane(textPane);
-		mainPnl.add(scrollPane, BorderLayout.CENTER);
+		textPane.setCaretPosition(0); // scroll to top
+		mainPnl.add(new JScrollPane(textPane), BorderLayout.CENTER);
 		
+		JPanel topPnl = new JPanel(new BorderLayout(SPACE, SPACE));
+		topPnl.add(new JLabel(
+				"<html><b>Make any desired modifications below, then choose "
+				+ "an output filename and click \"Write files.\""),
+				BorderLayout.NORTH);
 		JPanel highlightPnl = new JPanel(
 				new FlowLayout(FlowLayout.LEFT, SPACE, SPACE));
 		highlightPnl.add(new JLabel("Highlight students who voted for idea #:"));
@@ -75,26 +84,36 @@ public class OutputDialog extends JDialog {
 				textPane.getHighlighter().removeAllHighlights();
 			}
 		});
-		mainPnl.add(highlightPnl, BorderLayout.NORTH);
+		topPnl.add(highlightPnl, BorderLayout.CENTER);
+		mainPnl.add(topPnl, BorderLayout.NORTH);
 		
-		JPanel writePnl = new JPanel(new FlowLayout(FlowLayout.CENTER));
-		JButton writeBtn = new JButton("Write file");
-		writePnl.add(writeBtn);
+		outputPnl = new FileSelectionPanel(
+				"<html><b>Output file base name:</b><br>(Two files will be "
+				+ "created, with suffixes \" - details\" and \" - groups\". "
+				+ "The details file is for the instructor and the groups file "
+				+ "is for the students.)",
+				System.getProperty("user.home") + File.separator + "results", 
+				true, false, null);
+		JButton writeBtn = new JButton("Write files");
 		writeBtn.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				writeFile();
 			}
 		});
-		mainPnl.add(writePnl, BorderLayout.SOUTH);
+		JPanel writePnl = new JPanel(new FlowLayout(FlowLayout.CENTER));
+		writePnl.add(writeBtn);
+		outputPnl.add(writePnl, BorderLayout.SOUTH);
+		mainPnl.add(outputPnl, BorderLayout.SOUTH);
 		
-		setSize(600, 600);
+		setSize(600, 700);
 		setLocationRelativeTo(null);
 		setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 		setVisible(true);
 	}
 	
 	private void highlightIdea() {
+		// get the idea number from the text field
 		int ideaNum;
 		try {
 			ideaNum = Integer.parseInt(highlightTF.getText());
@@ -105,7 +124,8 @@ public class OutputDialog extends JDialog {
 			return;
 		}
 		Highlighter highlighter = textPane.getHighlighter();
-		highlighter.removeAllHighlights();
+		highlighter.removeAllHighlights(); // remove old highlights
+		// get the current text
 		String text;
 		try {
 			text = textPane.getDocument().getText(0, 
@@ -114,6 +134,7 @@ public class OutputDialog extends JDialog {
 			System.err.println(ex);
 			return;
 		}
+		// find lines of student/vote info containing the given idea number
 		Pattern pattern = Pattern.compile(
 				// "* " followed by non-*s followed by " - "
 				"\\* [^\\*]*?( - )"
@@ -141,35 +162,44 @@ public class OutputDialog extends JDialog {
 				System.err.println(ex);
 			}
 		}
-		textPane.setCaretPosition(0);
+		textPane.setCaretPosition(0); // scroll to top
 	}
 	
 	private void writeFile() {
-		String fname = FileSelectionDialog.showDialog(
-				OutputDialog.this.parent, "Choose output file", 
-				"<html>Choose output file base name. <br>(Two files will be "
-				+ "created, with suffixes \" - details\" and \" - groups\")", 
-				System.getProperty("user.home") + File.separator + "results", 
-				false, null, true);
+		String fname = outputPnl.getSelectedPath();
 		if (fname == null)
 			return;
+		// remove extensions that might have previously been added
 		fname = fname.replaceAll("\\.(html|htm|txt)$", "");
 		String text = textPane.getText();
-		int ndx = text.indexOf("<body>");
-		if (ndx != -1) {
-			text = text.substring(ndx + 6);
-			ndx = text.indexOf("</body>");
-			if (ndx != -1)
-				text = text.substring(0, ndx);
-		}
+		text = text.replaceAll("\\&quot;", "\"");
+		// the text pane will add <html><head></head><body>...</body></html>
+		// to the text, so remove everything but the body contents
+		text = text.replaceFirst("<html>\\s*<head>\\s*</head>\\s*<body>", "");
+		text = text.replaceAll("</body>\\s*</html>", "");
+		// font tags could have randomly been added...
+		text = text.replaceAll("</?font.*?>", "");
+		// replace newline followed by non-space with <br> tag
 		text = text.replaceAll("\n(\\S)", "<br>$1");
+		// replace all space and/or newline sequences with one space 
+		// (the text pane does this weird indenting and line wrapping thing 
+		// where it combines the input text into one line, wraps it in HTML
+		// as above, and line wraps at a certain character limit and re-indents)
 		text = text.replaceAll("\\s+", " ");
+		text = text.replaceAll("<br>\\s*<br>\\*", "<br>\\*");
+		// put a newline before all <br> tags (for easier reading of the source)
 		text = text.replaceAll("<br>", "\n<br>");
+		// fix this weird problem
+		text = text.replaceAll("\n<br></b>", "</b>\n<br>");
+		// re-wrap with HTML stuff
 		text = "<html>\n<head>\n<title>Results</title>\n</head>\n<body>\n"
-				+ text + "\n</body>\n</html>\n";
+				+ FONT + "\n" + text + "\n</font>\n</body>\n</html>\n";
 		
+		// Make a short version that can be shown to students:
+		// remove all voting data from after students' names in groups
 		String shortText = text.replaceAll(
 				"(\\* [^\\*]*?)( - [^L]\\S*)( - \\[.*?\\])?", "$1");
+		// remove who proposed which idea from the vote totals section
 		shortText = shortText.replaceAll(
 				"( *\\d+ - +\\d+: \".*?\")([^\n]*?)(\n|<br>)", "$1$3");
 		FileWriter writer = null;

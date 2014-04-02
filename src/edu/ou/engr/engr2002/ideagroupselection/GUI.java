@@ -11,7 +11,6 @@ import java.awt.event.ItemListener;
 import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -25,26 +24,17 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 
 @SuppressWarnings("serial")
 public class GUI extends JFrame {
-
-	public static void main(String[] args) {
-		new GUI().setVisible(true);
-	}
-
 	private static final int SPACE = 5;
 	private static final int SPACE_L = 10;
 	
 	private CustomJPanel mainPnl = 
 			new CustomJPanel(CustomJPanel.VERTICAL, SPACE);
 	
-	private JPanel ideasPnl = new JPanel(new BorderLayout(SPACE, SPACE));
-	private JTextField ideasTF = new JTextField();
-	private JButton ideasBtn = new JButton("...");
+	private FileSelectionPanel ideasPnl;
 	private JCheckBox ideasVotesCB = new JCheckBox(
 			"This file also includes voting data");
 	
-	private JPanel votesPnl = new JPanel(new BorderLayout(SPACE, SPACE));
-	private JTextField votesDirTF = new JTextField();
-	private JButton votesDirBtn = new JButton("...");
+	private FileSelectionPanel votesPnl;
 	
 	private JPanel nameOrderPnl = new JPanel(
 			new FlowLayout(FlowLayout.LEFT, SPACE, SPACE));
@@ -71,59 +61,32 @@ public class GUI extends JFrame {
 		mainPnl.setBorder(new EmptyBorder(SPACE_L, SPACE_L, SPACE_L, SPACE_L));
 		
 		//////// ideas panel //////////////////////////////////////////////////
-		ideasPnl.add(new JLabel(
+		ideasPnl = new FileSelectionPanel(
 				"<html>Choose the CSV file containing the idea numbers, "
 				+ "idea names, and students' names."
 				+ "<br>The file must also include the names of students "
 				+ "who did not vote (leave their proposed idea blank)."
 				+ "<br>The first three columns must be idea #, idea name, "
-				+ "student name."),
-				BorderLayout.NORTH);
-		ideasPnl.add(ideasTF, BorderLayout.CENTER);
-		ideasPnl.add(ideasBtn, BorderLayout.EAST);
-		ideasBtn.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				String text = ideasTF.getText();
-				JFileChooser chooser = new JFileChooser(text == null ? "" : text);
-				chooser.addChoosableFileFilter(new FileNameExtensionFilter(
-						"CSV files (*.csv)", "csv"));
-				int option = chooser.showOpenDialog(GUI.this);
-				if (option == JFileChooser.APPROVE_OPTION) 
-					ideasTF.setText(chooser.getSelectedFile().getAbsolutePath());
-			}
-		});
+				+ "student name.",
+				null, false,  false,
+				new FileNameExtensionFilter("CSV files (*.csv)", "csv"));
+		// FileSelectionPanel uses a BorderLayout with an empty South section
 		ideasPnl.add(ideasVotesCB, BorderLayout.SOUTH);
 		ideasVotesCB.addItemListener(new ItemListener() {
 			@Override
 			public void itemStateChanged(ItemEvent e) {
-				boolean enabled = e.getStateChange() == ItemEvent.DESELECTED;
-				votesDirTF.setEnabled(enabled);
-				votesDirBtn.setEnabled(enabled);
+				votesPnl.setEnabled(e.getStateChange() == ItemEvent.DESELECTED);
 			}
 		});
 		mainPnl.add(ideasPnl);
 		mainPnl.add(new JSeparator());
 		
 		//////// votes panel //////////////////////////////////////////////////
-		votesPnl.add(new JLabel(
+		votesPnl = new FileSelectionPanel(
 				"<html>Choose the directory containing the voting files "
-				+ "downloaded from D2L. "
-				+ "<br>The voting files must contain the students' names."),
-				BorderLayout.NORTH);
-		votesPnl.add(votesDirTF, BorderLayout.CENTER);
-		votesPnl.add(votesDirBtn, BorderLayout.EAST);
-		votesDirBtn.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				String text = votesDirTF.getText();
-				JFileChooser chooser = new JFileChooser(text == null ? "" : text);
-				chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-				int option = chooser.showOpenDialog(GUI.this);
-				if (option == JFileChooser.APPROVE_OPTION) 
-					votesDirTF.setText(chooser.getSelectedFile().getAbsolutePath());
-			}
-		});
+				+ "downloaded from D2L.<br>"
+				+ "The voting file names must contain the students' names.",
+				null, false, true, null);
 		mainPnl.add(votesPnl);
 		
 		///////// name order panel ////////////////////////////////////////////
@@ -166,12 +129,11 @@ public class GUI extends JFrame {
 		goBtn.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				String votesDir = ideasVotesCB.isSelected() ?
-						null : votesDirTF.getText();
 				String ideasStr = votesGroupsCB.isSelected() ?
 						null : ideasOverrideTF.getText();
-				Main.makeGroups(GUI.this, ideasTF.getText(), votesDir, 
-						ideasStr, nameOrderLastFirst.isSelected(),
+				Main.makeGroups(GUI.this, ideasPnl.getSelectedPath(),
+						votesPnl.getSelectedPath(), ideasStr, 
+						nameOrderLastFirst.isSelected(),
 						(Integer)groupsSpinner.getValue(),
 						(Integer)sizeSpinner.getValue());
 			}

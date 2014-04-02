@@ -5,63 +5,41 @@ import java.awt.FlowLayout;
 import java.awt.Frame;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.File;
 
 import javax.swing.JButton;
 import javax.swing.JDialog;
-import javax.swing.JFileChooser;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JTextField;
 import javax.swing.border.EmptyBorder;
 import javax.swing.filechooser.FileFilter;
 
-@SuppressWarnings("serial")
+/**
+ * Dialog for selecting a file, with text field (to type/paste a path) and a
+ * browse button (to choose a path with a file chooser).
+ */
 public class FileSelectionDialog extends JDialog {
-	private JTextField pathField;
+	private static final long serialVersionUID = 1L;
+	private FileSelectionPanel fsp;
 	// will be null until the dialog closes
 	private String selectedFile = null;
-	private JFileChooser chooser;
-	private boolean isSaveDialog;
 	
 	/**
 	 * @param owner           parent window (can be null)
 	 * @param title           dialog title
 	 * @param message         instruction message
 	 * @param defaultPath     default path to show in box
+	 * @param isSaveDialog    true if this should be a save (not open) dialog
 	 * @param directoriesOnly true to only allow selecting directories
 	 * @param fileFilter      Optional file filter (can be null)
-	 * @param isSaveDialog    true if this should be a save (not open) dialog
 	 */
 	private FileSelectionDialog(Frame owner, String title, String message, 
-			String defaultPath, boolean directoriesOnly, FileFilter fileFilter,
-			boolean isSaveDialog) {
+			String defaultPath, boolean isSaveDialog, boolean directoriesOnly, 
+			FileFilter fileFilter) {
 		super(owner, title, true);
-		this.isSaveDialog = isSaveDialog;
-		chooser = new JFileChooser();
-		if (directoriesOnly)
-			chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-		if (fileFilter != null) 
-			chooser.addChoosableFileFilter(fileFilter);
-		JPanel mainPanel = new JPanel(new BorderLayout(5, 5));
-		mainPanel.setBorder(new EmptyBorder(10,10,10,10));
 		
-		// top: message
-		JLabel messageLbl = new JLabel(message);
-		mainPanel.add(messageLbl, BorderLayout.NORTH);
-
-		// center: path and browse button
-		pathField = new JTextField(defaultPath, 40);
-		mainPanel.add(pathField, BorderLayout.CENTER);
-		JButton browseBtn = new JButton("...");
-		browseBtn.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				showFileChooser();
-			}
-		});
-		mainPanel.add(browseBtn, BorderLayout.EAST);
+		fsp = new FileSelectionPanel(message, defaultPath, isSaveDialog,
+				directoriesOnly, fileFilter);
+		fsp.setBorder(new EmptyBorder(10,10,10,10));
 		
-		// botton: cancel and OK buttons
 		JPanel bottomPnl = new JPanel(new FlowLayout(FlowLayout.RIGHT));
 		JButton cancelBtn = new JButton("Cancel");
 		cancelBtn.addActionListener(new ActionListener() {
@@ -80,9 +58,9 @@ public class FileSelectionDialog extends JDialog {
 		bottomPnl.add(cancelBtn);
 		bottomPnl.add(space);
 		bottomPnl.add(okayBtn);
-		mainPanel.add(bottomPnl, BorderLayout.SOUTH);
+		fsp.add(bottomPnl, BorderLayout.SOUTH);
 		
-		add(mainPanel);
+		add(fsp);
 		getRootPane().setDefaultButton(okayBtn);
 		pack();
 		setResizable(false);
@@ -92,34 +70,23 @@ public class FileSelectionDialog extends JDialog {
 	}
 	
 	private void closeDialog(boolean userAccepted) {
-		selectedFile = userAccepted ? pathField.getText() : null;
+		selectedFile = userAccepted ? fsp.getSelectedPath() : null;
 		dispose();
 	}
-	
-	private void showFileChooser() {
-		chooser.setSelectedFile(new File(pathField.getText()));
-		int result;
-		if (isSaveDialog)
-			result = chooser.showSaveDialog(this);
-		else
-			result = chooser.showOpenDialog(this);
-		if (result == JFileChooser.APPROVE_OPTION) 
-			pathField.setText(chooser.getSelectedFile().getAbsolutePath());
-	}
-	
+
 	/**
 	 * @param owner           parent window (can be null)
 	 * @param title           dialog title
 	 * @param message         instruction message
 	 * @param defaultPath     default path to show in box
+	 * @param isSaveDialog    true if this should be a save (not open) dialog
 	 * @param directoriesOnly true to only allow selecting directories
 	 * @param fileFilter      Optional file filter (can be null)
-	 * @param isSaveDialog    true if this should be a save (not open) dialog
 	 */
 	public static String showDialog(Frame owner, String title, String message, 
-			String defaultPath, boolean directoriesOnly, FileFilter fileFilter,
-			boolean isSaveDialog) {
+			String defaultPath, boolean isSaveDialog, boolean directoriesOnly, 
+			FileFilter fileFilter) {
 		return new FileSelectionDialog(owner, title, message, defaultPath, 
-				directoriesOnly, fileFilter, isSaveDialog).selectedFile;
+				isSaveDialog, directoriesOnly, fileFilter).selectedFile;
 	}
 }

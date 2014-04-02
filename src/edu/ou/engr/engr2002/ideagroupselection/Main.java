@@ -19,28 +19,12 @@ import edu.ou.engr.engr2002.ideagroupselection.Idea.IdeaSet;
 public class Main {
 	public static final boolean LOG = true;
 	public static final boolean DEBUG = true;
-	// people with Windows will probably be using Notepad (rather than a 
-	// proper text editor) to view the output... >.<
-	private static final String SEP = "\r\n";
 	
 	public static void main(String[] args) {
 		new GUI().setVisible(true);
 	}
 
 	public static void makeGroups(GUI gui, String ideasCsv, String votesDir, 
-			String groupsStr, boolean lastFirst, int numGroups, 
-			int maxGroupSize) {
-		String sepOrig = System.getProperty("line.separator");
-//		System.setProperty("line.separator", SEP);
-		try {
-			makeGroups2(gui, ideasCsv, votesDir, groupsStr, lastFirst, 
-					numGroups, maxGroupSize);
-		} finally {
-			System.setProperty("line.separator", sepOrig);
-		}
-	}
-	
-	private static void makeGroups2(GUI gui, String ideasCsv, String votesDir, 
 			String groupsStr, boolean lastFirst, int numGroups, 
 			int maxGroupSize) {
 		HashSet<Student> students = new HashSet<Student>();
@@ -73,7 +57,7 @@ public class Main {
 		// Put the remaining students in groups
 		String warnings = groupStudents(groups, remainingStudents);
 		
-		String output = warnings + SEP + getIdeasGroupsStr(ideas, students, 
+		String output = warnings + '\n' + getIdeasGroupsStr(ideas, students, 
 				groups.values(), false, true);
 		System.out.println(output);
 		if (gui != null)
@@ -412,12 +396,12 @@ public class Main {
 		
 		// Some students did not get put in groups.
 		if (remainingStudents.size() > 0) {
-			err.append("Some students did not get put into groups." + SEP);
+			err.append("Some students did not get put into groups.\n");
 			for (Student s : remainingStudents)
 				err.append("* " + s.getName() + " - n/a"
 						+ (s.didStudentVote() ? " - " + s.getVoteString() : "")
-						+ SEP);
-			err.append(SEP);
+						+ '\n');
+			err.append('\n');
 		}
 		
 		// Add non-voting students to groups with size < 4 first.
@@ -436,10 +420,10 @@ public class Main {
 		}
 		if (!nonVotingStudents.isEmpty()) {
 			err.append("WARNING: some non-voting students were not " +
-					"put in groups. This should not happen." + SEP);
+					"put in groups. This should not happen.\n");
 			for (Student s : nonVotingStudents)
-				err.append(s + SEP);
-			err.append(SEP);
+				err.append(s + "\n");
+			err.append('\n');
 		}
 		
 		return err.toString();
@@ -532,7 +516,7 @@ public class Main {
 
 		if (shortVersion) {
 			for (Group g : groupsSorted) {
-				sb.append(g.getBriefString() + SEP);
+				sb.append(g.getBriefString() + '\n');
 			}
 			
 			for (Idea idea : ideas.getIdeasSorted()) {
@@ -542,17 +526,17 @@ public class Main {
 		}
 
 		if (shortVersion && longVersion)
-			sb.append(SEP + SEP + "---------- Details ----------" + SEP);
+			sb.append("\n\n---------- Details ----------\n");
 		
 		if (longVersion) {
 			for (Group g : groupsSorted) {
-				sb.append(g + SEP);
+				sb.append(g + "\n");
 			}
-			sb.append(SEP + SEP);
+			sb.append("\n\n");
 			String groupFmt = " (Group %s)";
 			for (Idea idea : ideas.getIdeasSorted()) {
 				String name = ideasStudents.get(idea).getName();
-				sb.append(String.format("%3d - %2d: \"%s\" - %s%s" + SEP, 
+				sb.append(String.format("%3d - %2d: \"%s\" - %s%s\n", 
 						idea.votes, idea.number, idea.name, name,
 						ideasGroups.containsKey(idea)
 								? String.format(groupFmt, ideasGroups.get(idea).number)

@@ -90,28 +90,38 @@ public class Group implements Comparable<Group> {
 		return value;
 	}
 	
-	public String getBriefString() {
+	/** 
+	 * Returned string contains group number, idea number and name,
+	 * leader name, and member names.
+	 */
+	public String toShortString() {
 		StringBuilder sb = new StringBuilder(256);
-		sb.append("Group " + number + "\n");
-		sb.append("Idea " + idea + "\n");
-		sb.append("1) " + members.get(0).getName() + " - Leader\n");
-		for (int i = 1; i < members.size(); ++i)
-			sb.append(String.format("%s) %s\n", i+1, members.get(i).getName()));
+		sb.append("Group " + number + '\n');
+		sb.append("Idea " + idea + '\n');
+		sb.append("* " + members.get(0).getName() + " - Leader\n");
+		for (Student member : members.subList(1, members.size()))
+			sb.append("* " + member.getName() + '\n');
 		return sb.toString();
 	}
 	
+	/**
+	 * Returned string contains group number, idea number and name,
+	 * leader name, member name, the list of ideas each member voted for,
+	 * and the rank that each member gave the group's idea.
+	 */
+	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder(512);
-		sb.append("Group " + number + "\n");
-		sb.append("Idea " + idea + "\n");
+		sb.append("Group " + number + '\n');
+		sb.append("Idea " + idea + '\n');
 		sb.append("* " + members.get(0).getName() + " - Leader\n");
-		for (int i = 1; i < members.size(); ++i) {
-			int rank = members.get(i).getRankOfIdea(idea.number);
-			sb.append("* " + members.get(i).getName() + " - "
-					+ (rank == 0 ? "n/a" : rank + ""));
-			if (Main.DEBUG && members.get(i).didStudentVote())
-				sb.append(" - " + members.get(i).getVoteString());
-			sb.append("\n");
+		for (Student member : members.subList(1, members.size())) {
+			int rank = member.getRankOfIdea(idea.number);
+			sb.append(String.format("* %s - %s",
+					member.getName(), rank == 0 ? "n/a" : rank));
+			if (member.didStudentVote())
+				sb.append(" - " + member.getVoteString());
+			sb.append('\n');
 		}
 		return sb.toString();
 	}

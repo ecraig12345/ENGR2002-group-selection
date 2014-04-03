@@ -55,19 +55,23 @@ public class Student {
 	public Student(File votesFile, Idea proposedIdea, boolean lastFirst) 
 			throws IOException {
 		this.proposedIdea = proposedIdea;
+		this.voted = true;
 		/* Find the student's name from the filename.
 		 * D2L makes file names of format:
 		 * Elizabeth Craig- Oct 17, 2013 1030 PM - original filename.csv
+		 * (and recently they've added some numbers before the name).
 		 * We want to find the student's name from the file name and reverse
 		 * the order to last, first. */
 		// Start by getting the filename out of the path
 		String filename = votesFile.getName();
+		// Get rid of any numeric/spaces/dashes junk before the name
+		filename = filename.replaceFirst("[\\d- ]*", "");
 		// Then get rid of the junk after the name
 		int sepIndex = filename.indexOf("- ");
 		if (sepIndex == -1) sepIndex = filename.length();
-		String name = filename.substring(0, sepIndex);
+		filename = filename.substring(0, sepIndex);
 		// Set the name in the desired order
-		this.name = nameToOrder(name, lastFirst);
+		this.name = nameToOrder(filename, lastFirst);
 		
 		CSVReader reader = null;
 		try {
@@ -79,24 +83,22 @@ public class Student {
 			String[] nextLine;
 			int i = 0;
 			while (i < NUM_RANKED && (nextLine = reader.readNext()) != null) {
-				// The value in the third column should be a number.
+				// The value in the second or third column should be a number.
 				try {
-					topIdeas[i] = Integer.parseInt(nextLine[2].trim());
+					try {
+						topIdeas[i] = Integer.parseInt(nextLine[1].trim());
+					} catch (NumberFormatException ex) {
+						if (nextLine.length == 2)
+							throw ex;
+						topIdeas[i] = Integer.parseInt(nextLine[2].trim());
+					}
 				} catch (ArrayIndexOutOfBoundsException ex) {
 					// The second cell was missing--odd but recoverable
-					Main.debug("Second cell missing");
 				}
 				++i;
 			}
 		} finally {
 			if (reader != null) reader.close();
-		}
-		
-		if (Main.LOG) { 
-			Main.log("Found student " + this.name);
-			if (proposedIdea != null)
-				Main.log("(proposed idea: " + proposedIdea.number + ")");
-			Main.log(Arrays.toString(topIdeas));
 		}
 	}
 	
@@ -110,13 +112,9 @@ public class Student {
 		return proposedIdea;
 	}
 	
-	/**
-	 * Set the student's proposed idea.
-	 * @throws IllegalArgumentException if the student's idea had already
-	 * been set to something other than null
-	 */
+	/** Set the student's proposed idea. */
 	public void setProposedIdea(Idea proposedIdea) {
-		if (proposedIdea != null)
+		if (this.proposedIdea != null)
 			throw new IllegalArgumentException("Can't set idea twice");
 		this.proposedIdea = proposedIdea;
 	}
@@ -150,7 +148,7 @@ public class Student {
 	
 	/** Gets a string of the idea numbers the student voted for */
 	public String getVoteString() {
-		return Arrays.toString(topIdeas);
+		return voted ? Arrays.toString(topIdeas) : "n/a";
 	}
 
 	/**
@@ -199,7 +197,7 @@ public class Student {
 	public String toString() {
 		return name 
 				+ (proposedIdea == null ? " " : " (" + proposedIdea + ") ") 
-				+ Arrays.toString(topIdeas);
+				+ getVoteString();
 	}
 	
 	/**

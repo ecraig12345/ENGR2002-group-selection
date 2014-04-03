@@ -24,6 +24,10 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 
 @SuppressWarnings("serial")
 public class GUI extends JFrame {
+	public static void main(String[] args) {
+		new GUI().setVisible(true);
+	}
+	
 	private static final int SPACE = 5;
 	private static final int SPACE_L = 10;
 	
@@ -131,11 +135,14 @@ public class GUI extends JFrame {
 			public void actionPerformed(ActionEvent e) {
 				String ideasStr = votesGroupsCB.isSelected() ?
 						null : ideasOverrideTF.getText();
-				Main.makeGroups(GUI.this, ideasPnl.getSelectedPath(),
+				String output = GroupCreator.makeGroupsStr(
+						ideasPnl.getSelectedPath(),
 						votesPnl.getSelectedPath(), ideasStr, 
 						nameOrderLastFirst.isSelected(),
 						(Integer)groupsSpinner.getValue(),
-						(Integer)sizeSpinner.getValue());
+						(Integer)sizeSpinner.getValue(), false, true);
+				if (output != null)
+					new OutputDialog(GUI.this, output);
 			}
 		});
 		

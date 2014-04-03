@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -16,25 +15,76 @@ import javax.swing.JOptionPane;
 import au.com.bytecode.opencsv.CSVReader;
 import edu.ou.engr.engr2002.ideagroupselection.Idea.IdeaSet;
 
-public class Main {
-	public static final boolean LOG = true;
-	public static final boolean DEBUG = true;
+public class GroupCreator {
+	/**
+	 * Reads files, creates groups, and returns a string with the results.
+	 * @param ideasCsv		path to CSV file with ideas, students, and
+	 * 						(optionally) voting data
+	 * @param votesDir		optional: path to directory with student voting
+	 * 						files (if this is given, won't look for voting data 
+	 * 						in ideasCsv)
+	 * @param groupsStr		optional: string with idea numbers to use
+	 * @param lastFirst		if true, use name format "Last, First" in output
+	 * @param numGroups		number of groups to create (<= 0 means as many as
+	 * 						given in groupsStr)
+	 * @param maxGroupSize	max group size
+	 * @param shortVersion	include short (student) version in output
+	 * @param longVersion	include long (instructor) version in output
+	 * @return A string with the results, or null if an error occurred
+	 */
+	public static String makeGroupsStr(String ideasCsv, String votesDir, 
+			String groupsStr, boolean lastFirst, int numGroups, 
+			int maxGroupSize, boolean shortVersion, boolean longVersion) {
+		if (ideasCsv == null) {
+			JOptionPane.showMessageDialog(null, "Must specify path to "
+					+ "CSV file with students and ideas.", "Error", 
+					JOptionPane.ERROR_MESSAGE);
+			return null;
+		}
+		return new GroupCreator(ideasCsv, votesDir, groupsStr, lastFirst, 
+				numGroups, maxGroupSize)
+				.getIdeasGroupsStr(shortVersion, longVersion);
+	}
 	
-	public static void main(String[] args) {
-		new GUI().setVisible(true);
+	private boolean lastFirst;
+	private String ideasCsv;
+	private String votesDir;
+	private int numGroups;
+	private int maxGroupSize;
+	private HashSet<Student> students = new HashSet<Student>();
+	private IdeaSet ideas = new IdeaSet();
+	private HashMap<Integer, Group> groups;
+	private String warnings = "";
+	private String results = null;
+	private boolean success = false;
+	
+	/** 
+	 * Make a GroupCreator with parameters as described in makeGroupsStr
+	 * and perform the calculations to put students in groups.
+	 * @throws IllegalArgumentException if ideasCsv is null
+	 */
+	private GroupCreator(String ideasCsv, String votesDir, String groupsStr,
+			boolean lastFirst, int numGroups, int maxGroupSize) {
+		if (ideasCsv == null) 
+			throw new IllegalArgumentException("ideasCsv cannot be null");
+		this.ideasCsv = ideasCsv;
+		this.votesDir = votesDir;
+		this.lastFirst = lastFirst;
+		this.numGroups = numGroups;
+		this.maxGroupSize = maxGroupSize;
+		makeGroups(groupsStr);
 	}
 
-	public static void makeGroups(GUI gui, String ideasCsv, String votesDir, 
-			String groupsStr, boolean lastFirst, int numGroups, 
-			int maxGroupSize) {
-		HashSet<Student> students = new HashSet<Student>();
-		IdeaSet ideas = new IdeaSet();
+	/**
+	 * Make groups given the class members plus the optional groupsStr.
+	 * @param groupsStr if non-null, will determine the idea numbers used
+	 */
+	private void makeGroups(String groupsStr) {
 		try {
 			if (votesDir == null) {
-				readStudentsIdeasFromFile(ideas, students, ideasCsv, lastFirst);
+				readStudentsIdeasFromFile();
 			} else {
-				if (!readStudentsIdeasFromVotesDir(ideas, students, ideasCsv, 
-						votesDir, lastFirst))
+				if (!readStudentsIdeasFromVotesDir())
 					return;
 			}
 		} catch (IOException ex) {
@@ -42,115 +92,58 @@ public class Main {
 					ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
 			return;
 		}
+		// Count the votes
+		countVotes();
 		
 		// Start groups for the top ideas, with the student who proposed the
 		// idea as the leader of the groups. Remove the leaders from the
 		// set of students.
 		HashSet<Student> remainingStudents = new HashSet<Student>(students);
-		HashMap<Integer, Group> groups;
 		if (groupsStr == null)
-			groups = makeGroupsFromVotes(ideas, remainingStudents, numGroups,
-					maxGroupSize);
+			groups = makeGroupsFromVotes(remainingStudents);
 		else
-			groups = makeGroupsFromString(groupsStr, ideas, remainingStudents,
-					numGroups, maxGroupSize);
+			groups = makeGroupsFromString(groupsStr, remainingStudents);
 		// Put the remaining students in groups
-		String warnings = groupStudents(groups, remainingStudents);
-		
-		String output = warnings + '\n' + getIdeasGroupsStr(ideas, students, 
-				groups.values(), false, true);
-		System.out.println(output);
-		if (gui != null)
-			new OutputDialog(gui, output);
+		groupStudents(groups, remainingStudents);
+		success = true;
 	}
 	
 	/**
 	 * Reads the file with ideas, students, and votes into ideas and students 
 	 * (including determining the number of votes each idea received).
-	 * @param ideas Empty IdeaSet
-	 * @param students Empty HashSet
-	 * @param filePath Path to the CSV file
-	 * @param lastFirst If true, use name format "Last, First" (regardless of
-	 * original format used)
+	 * Pre: ideas and students are empty
+	 * Post: ideas and students contain the ideas and students read from file
 	 * @throws IOException if there is a problem reading the file
 	 */
-	private static void readStudentsIdeasFromFile(IdeaSet ideas, 
-			HashSet<Student> students, String filePath, boolean lastFirst) 
-					throws IOException {
+	private void readStudentsIdeasFromFile() throws IOException {
 		// Read the ideas, student names, and votes from the file
-		CSVReader reader = new CSVReader(new FileReader(filePath));
+		CSVReader reader = new CSVReader(new FileReader(ideasCsv));
 		try {
 			String[] nextLine = reader.readNext(); // skip the first line
 			while ((nextLine = reader.readNext()) != null) {
-				if (nextLine.length < 3) {
-					// This might be an empty line or something
-					continue;
-				} 
-				// Get the student's name. If this is empty, that's bad.
-				String name = nextLine[2];
-				if (name.isEmpty())
-					continue;
-
-				// Get the student's idea (if any) from this line
-				Idea idea = null;
-				try {
-					int ideaNumber = Integer.parseInt(nextLine[0].trim());
-					// 0 means no idea
-					if (ideaNumber > 0) {
-						idea = new Idea(nextLine[1].trim(), ideaNumber);
-						ideas.add(idea);
-					}
-				} catch (NumberFormatException ex) {
-					// There was not an idea for this student
-				}
-
-				// Get the student's votes (if the line is long enough)
-				int[] votes = new int[10];
-				if (nextLine.length >= 13) {
-					for (int i = 0; i < 10; ++i) {
-						try {
-							votes[i] = Integer.parseInt(nextLine[i+3].trim());
-						} catch (NumberFormatException ex) {
-						}
-					}
-				}
-				students.add(new Student(name, votes, idea, lastFirst));
+				Student studentRead = parseStudent(nextLine, true);
+				if (studentRead != null)
+					students.add(studentRead);
 			}
 		} finally {
 			reader.close();
 		}
-		
-		// Update the idea vote totals
-		for (Student s : students) {
-			if (s.didStudentVote()) 
-				for (int i = 0; i < 10; ++i)
-					ideas.addVotesToIdeaNumber(s.getIdeaRanked(i+1), 10 - i);
-		}
 	}
 	
 	/**
 	 * Reads the file with ideas, students, and votes into ideas and students 
 	 * (including determining the number of votes each idea received).
-
-	 * @param ideas
-	 * @param students
-	 * @param studentIdeaFilePath
-	 * @param votesDirPath
-	 * @param lastFirst
-	 * @return
 	 * @throws IOException
+	 * @throws IllegalArgumentException
 	 */
-	private static boolean readStudentsIdeasFromVotesDir(IdeaSet ideas, 
-			HashSet<Student> students, String studentIdeaFilePath,
-			String votesDirPath, boolean lastFirst) throws IOException {
-		if (ideas == null || students == null || studentIdeaFilePath == null
-				|| votesDirPath == null)
-			throw new IllegalArgumentException("no arguments can be null");
+	private boolean readStudentsIdeasFromVotesDir() throws IOException {
+		if (votesDir == null)
+			throw new IllegalArgumentException("votesDir cannot be null");
 	
 		// Get all the files in the voting sheet directory
-		File[] files = new File(votesDirPath).listFiles();
+		File[] files = new File(votesDir).listFiles();
 		if (files == null)
-			throw new IOException("Not a directory: " + votesDirPath);
+			throw new IOException("Not a directory: " + votesDir);
 		String errorContinue = "<p>Continue anyway?<br>(if you continue, this "
 				+ "student's results will not be included in the output)";
 		for (File file : files) {
@@ -181,46 +174,28 @@ public class Main {
 		}
 		
 		// Read the idea names from a separate file
-		CSVReader reader = new CSVReader(new FileReader(studentIdeaFilePath));
+		CSVReader reader = new CSVReader(new FileReader(ideasCsv));
 		try {
 			String[] nextLine = reader.readNext(); // skip the first line
 			while ((nextLine = reader.readNext()) != null) {
-				if (nextLine.length < 3) {
-					// This might be an empty line or something
+				Student studentRead = parseStudent(nextLine, false);
+				if (studentRead == null)
 					continue;
-				} 
-				// Get the student's name. If this is empty, that's bad.
-				String name = nextLine[2];
-				if (name.isEmpty())
-					continue;
-				name = Student.nameToOrder(name, lastFirst);
 				
-				// Get the student's idea (if any) from this line
-				Idea idea = null;
-				try {
-					int ideaNumber = Integer.parseInt(nextLine[0].trim());
-					// 0 means no idea
-					if (ideaNumber > 0) {
-						idea = new Idea(nextLine[1].trim(), ideaNumber);
-						ideas.add(idea);
-					}
-				} catch (NumberFormatException ex) {
-					// There was not an idea for this student
-				}
 				// Make sure we have a record of this student.
 				// Also, figure out which student proposed this idea.
 				boolean studentFound = false;
 				for (Student s : students) {
-					if (s.getName().equals(name)) {
-						if (idea != null)
-							s.setProposedIdea(idea);
+					if (s.getName().equals(studentRead.getName())) {
+						if (studentRead.getProposedIdea() != null)
+							s.setProposedIdea(studentRead.getProposedIdea());
 						studentFound = true;
 						break;
 					}
 				}
 				if (!studentFound)
 					// The student must not have voted
-					students.add(new Student(name, null, idea, lastFirst));
+					students.add(studentRead);
 			}
 		} finally {
 			reader.close();
@@ -228,36 +203,82 @@ public class Main {
 		
 		return true;
 	}
+	
+	private Student parseStudent(String[] nextLine, boolean includeVotes) {
+		if (nextLine.length < 3) {
+			// This might be an empty line or something
+			return null;
+		} 
+		// Get the student's name. If this is empty, that's bad.
+		String name = nextLine[2];
+		if (name.isEmpty())
+			return null;
+
+		// Get the student's idea (if any) from this line
+		Idea idea = null;
+		try {
+			int ideaNumber = Integer.parseInt(nextLine[0].trim());
+			// 0 means no idea
+			if (ideaNumber > 0) {
+				idea = new Idea(nextLine[1].trim(), ideaNumber);
+				ideas.add(idea);
+			}
+		} catch (NumberFormatException ex) {
+			// There was not an idea for this student
+		}
+
+		int[] votes = null;
+		if (includeVotes) {
+			// Get the student's votes (if the line is long enough)
+			votes = new int[10];
+			if (nextLine.length >= 13) {
+				for (int i = 0; i < 10; ++i) {
+					try {
+						votes[i] = Integer.parseInt(nextLine[i+3].trim());
+					} catch (NumberFormatException ex) {
+					}
+				}
+			}
+		}
+		return new Student(name, votes, idea, lastFirst);
+	}
+	
+	private void countVotes() {
+		// Update the idea vote totals
+		for (Student s : students) {
+			if (s.didStudentVote()) 
+				for (int i = 0; i < 10; ++i)
+					ideas.addVotesToIdeaNumber(s.getIdeaRanked(i+1), 10 - i);
+		}
+	}
 
 	/**
 	 * Choose the idea for each group based on the votes, put the students who
 	 * proposed those ideas in the respective groups as leaders, and remove
 	 * the leaders from the list of students.
 	 * 
-	 * @param ideas Set of ideas with vote data calculated
-	 * @param students Set of students (after the method exits, group leaders
-	 * will be removed from this set)
-	 * @param numGroups Number of groups to make
+	 * @param remainingStudents Set of students (after the method exits, group 
+	 * leaders will be removed from this set)
 	 * @return Map from idea number to group objects, with only the group
 	 * leaders added to the group objects' lists of members
 	 */
-	private static HashMap<Integer, Group> makeGroupsFromVotes(IdeaSet ideas,
-			HashSet<Student> students, int numGroups, int maxMembers) {
+	private HashMap<Integer, Group> makeGroupsFromVotes(
+			HashSet<Student> remainingStudents) {
 		// Get the top numGroups ideas
 		List<Idea> topIdeas = ideas.getTopIdeas(numGroups);
 		HashMap<Integer, Group> groups = new HashMap<Integer, Group>(numGroups);
 		HashSet<Student> leaders = new HashSet<Student>();
 		// Find the students who proposed the top ideas, and make groups with
 		// those students as leaders.
-		for (Student s : students) {
+		for (Student s : remainingStudents) {
 			Idea idea = s.getProposedIdea();
 			if (idea != null && topIdeas.contains(idea)) {
-				groups.put(idea.number, new Group(s, idea, maxMembers));
+				groups.put(idea.number, new Group(s, idea, maxGroupSize));
 				leaders.add(s);
 			}
 		}
 		// Remove all the students who are now in groups
-		students.removeAll(leaders);
+		remainingStudents.removeAll(leaders);
 		
 		// If the number of groups didn't turn out quite right, that's bad
 		if (groups.size() != numGroups) {
@@ -273,20 +294,16 @@ public class Main {
 	 * Make groups for the idea numbers given in a string, put the students
 	 * who proposed those ideas in the respective groups as leaders, and remove
 	 * the leaders from the list of students.
-
+	 * If numGroups is <= 0, make however many groups there are numbers in input.
+	 * 
 	 * @param input String containing idea numbers (separated by spaces,
 	 * commas, or anything else that's not a number)
-	 * @param ideas All the ideas
-	 * @param students All the students (this method will remove any students
-	 * who are group leaders)
-	 * @param numGroups Number of groups to make (if <= 0, make however many
-	 * groups there are numbers in input)
-	 * @param maxMembers Maximum number of members in a group
+	 * @param remainingStudents All the students (this method will remove any 
+	 * students who are group leaders)
 	 * @return Mapping from idea number to group
 	 */
-	private static HashMap<Integer, Group> makeGroupsFromString(String input, 
-			IdeaSet ideas, HashSet<Student> students, int numGroups,
-			int maxMembers) {
+	private HashMap<Integer, Group> makeGroupsFromString(String input, 
+			HashSet<Student> remainingStudents) {
 		// mapping from idea number to group
 		HashMap<Integer, Group> groups = new HashMap<Integer, Group>();
 		HashSet<Student> leaders = new HashSet<Student>();
@@ -316,14 +333,14 @@ public class Main {
 				break;
 			}
 			// Find the student who proposed the idea
-			Student leader = idea.findProposer(students);
+			Student leader = idea.findProposer(remainingStudents);
 			if (leader == null) {
 				error = "Couldn't find student who proposed idea " + ideaNumber;
 				break;
 			}
 			// Make a group for the idea and add the student who proposed
 			// the idea as the leader
-			groups.put(ideaNumber, new Group(leader, idea, maxMembers));
+			groups.put(ideaNumber, new Group(leader, idea, maxGroupSize));
 			leaders.add(leader);
 		}
 		if (error == null && numGroups > 0 && groups.size() != numGroups) {
@@ -336,7 +353,7 @@ public class Main {
 			return null;
 		}
 		// Remove all the students who are now in groups
-		students.removeAll(leaders);
+		remainingStudents.removeAll(leaders);
 
 		return groups;
 	}
@@ -344,6 +361,8 @@ public class Main {
 	/**
 	 * Put the remaining students in the groups. Tries to put students in 
 	 * groups for the ideas that they preferred.
+	 * (Updates warnings member with any problems encountered while putting
+	 * students in groups.)
 	 * @param groups Map from group numbers to group objects
 	 * @param remainingStudents Students who are not yet in a group.
 	 * When the method is called, this will probably be all the students except
@@ -353,7 +372,7 @@ public class Main {
 	 * voted but did not choose any of the ideas that won. 
 	 * @return String with information about the students not put in groups
 	 */
-	private static String groupStudents(HashMap<Integer, Group> groups, 
+	private void groupStudents(HashMap<Integer, Group> groups, 
 			HashSet<Student> remainingStudents) {
 		StringBuilder err = new StringBuilder();
 		// Make a list of students who did not vote and remove them from
@@ -426,7 +445,7 @@ public class Main {
 			err.append('\n');
 		}
 		
-		return err.toString();
+		this.warnings = err.toString();
 		
 //		// Make sure that no groups with fewer than four students were created.
 //		// If they were, resolve the problem by removing students from 
@@ -458,7 +477,7 @@ public class Main {
 	 * @param largeGroups Groups that are completely full
 	 * @return Set of groups whose sizes could not be fixed
 	 */
-	private static HashSet<Group> resolveGroupSizes(HashSet<Group> smallGroups,
+	private HashSet<Group> resolveGroupSizes(HashSet<Group> smallGroups,
 			HashSet<Group> largeGroups) {
 		HashSet<Group> problemGroups = new HashSet<Group>();
 		// For each group that is too small...
@@ -499,60 +518,65 @@ public class Main {
 		return problemGroups;
 	}
 	
-	private static String getIdeasGroupsStr(IdeaSet ideas, 
-			Collection<Student> students, Collection<Group> groups,
-			boolean shortVersion, boolean longVersion) {
+	/**
+	 * Get a string with the results of the group formation.
+	 * @param shortv Returned value should include short (student) version
+	 * @param longv Returned value should include long (instructor) version
+	 * @return the string as specified, or null if there was an error in the
+	 * process of forming groups (or both shortv and longv were false)
+	 */
+	public String getIdeasGroupsStr(boolean shortv, boolean longv) {
+		if (!success || !(shortv || longv))
+			return null;
+		if (results != null)
+			return results;
+
 		StringBuilder sb = new StringBuilder(2048);
-		HashMap<Idea, Student> ideasStudents = new HashMap<Idea, Student>();
-		for (Student s : students) {
-			if (s.getProposedIdea() != null) 
-				ideasStudents.put(s.getProposedIdea(), s);
-		}
-		HashMap<Idea, Group> ideasGroups = new HashMap<Idea, Group>();
-		for (Group g : groups) {
-			ideasGroups.put(g.idea, g);
-		}
-		TreeSet<Group> groupsSorted = new TreeSet<Group>(groups);
+		sb.append(warnings);
+		sb.append("\n\n");
+		TreeSet<Group> groupsSorted = new TreeSet<Group>(groups.values());
 
-		if (shortVersion) {
+		if (shortv) {
 			for (Group g : groupsSorted) {
-				sb.append(g.getBriefString() + '\n');
+				sb.append(g.toShortString() + '\n');
 			}
-			
 			for (Idea idea : ideas.getIdeasSorted()) {
-				sb.append(String.format("%3d - %2d: \"%s\"\r\n", idea.votes,
-						idea.number, idea.name));
+				sb.append(idea.toShortString() + '\n');
 			}
 		}
 
-		if (shortVersion && longVersion)
+		if (shortv && longv)
 			sb.append("\n\n---------- Details ----------\n");
 		
-		if (longVersion) {
+		if (longv) {
 			for (Group g : groupsSorted) {
 				sb.append(g + "\n");
 			}
 			sb.append("\n\n");
-			String groupFmt = " (Group %s)";
+			
+			// these structures will be used to look up students and groups
+			// by idea
+			HashMap<Idea, Student> ideasStudents = new HashMap<Idea, Student>();
+			for (Student s : students) {
+				if (s.getProposedIdea() != null) 
+					ideasStudents.put(s.getProposedIdea(), s);
+			}
+			HashMap<Idea, Group> ideasGroups = new HashMap<Idea, Group>();
+			for (Group g : groups.values()) {
+				ideasGroups.put(g.idea, g);
+			}
+
+			String groupFmt = " (Group %s)\n";
 			for (Idea idea : ideas.getIdeasSorted()) {
-				String name = ideasStudents.get(idea).getName();
-				sb.append(String.format("%3d - %2d: \"%s\" - %s%s\n", 
-						idea.votes, idea.number, idea.name, name,
-						ideasGroups.containsKey(idea)
-								? String.format(groupFmt, ideasGroups.get(idea).number)
-								: ""));
+				Student student = ideasStudents.get(idea);
+				Group group = ideasGroups.get(idea);
+				sb.append(idea.toLongString(
+						student == null ? "" : student.getName()));
+				sb.append(group == null ? "\n" : 
+					String.format(groupFmt, group.number));
 			}
 		}
-		return sb.toString();
-	}
-	
-	/** Print log messages to the command line */
-	public static void log(String message) {
-		if (LOG) System.out.println(message);
-	}
-	
-	/** Print debug messages to the command line */
-	public static void debug(String message) {
-		if (DEBUG) System.out.println(message);
+		results = sb.toString();
+		return results;
 	}
 }

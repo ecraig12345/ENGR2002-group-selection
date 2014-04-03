@@ -58,6 +58,18 @@ public class Idea implements Comparable<Idea> {
 		return 0;
 	}
 	
+	/** Returns votes - #: "idea name" */
+	public String toShortString() {
+		return String.format("%3d - %2d: \"%s\"", votes, number, name);
+	}
+	
+	/** Returns votes - #: "idea name" - student name */
+	public String toLongString(String studentName) {
+		return toShortString() + " - " + studentName;
+	}
+	
+	/** Returns #: idea name */
+	@Override
 	public String toString() {
 		return number + ": " + name;
 	}
